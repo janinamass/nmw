@@ -12,6 +12,7 @@ import sys
 import helpers.matrixparser as matrixparser
 import helpers.fastahelper as fastahelper
 import os
+import multiprocessing
 
 package_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -187,15 +188,77 @@ def main():
         usage()
     if not outfile:
         outfile = "out"
-    sm = ScoringMatrix("EBLOSUM62")
+    if num_cores < 2:
+        sm = ScoringMatrix(matrix)
+        fpa = fastahelper.FastaParser().read(fasta_a, " ", 0)
+        for ha,sa in fpa:
+            a = Sequence(ha,sa)
+            fpb = fastahelper.FastaParser().read(fasta_b, " ", 0)
+            for hb,sb in fpb:
+                b = Sequence(hb,sb)
+                s = Score(seqA = a, seqB = b, scoringMatrix = sm)
+                print(s)
+    else:
+        global SEMAPHORE
+        SEMAPHORE = multiprocessing.BoundedSemaphore(num_cores)
+        nmw_multi(matrix=matrix, fasta_a= fasta_a, fasta_b = fasta_b, outfile= outfile, num_cores = num_cores)
+
+
+
+def nmw_multi(matrix, fasta_a, fasta_b, outfile, num_cores):
+    tasks = multiprocessing.Queue()
+    sm = ScoringMatrix(matrix)
     fpa = fastahelper.FastaParser().read(fasta_a, " ", 0)
     for ha,sa in fpa:
         a = Sequence(ha,sa)
         fpb = fastahelper.FastaParser().read(fasta_b, " ", 0)
         for hb,sb in fpb:
             b = Sequence(hb,sb)
-            s = Score(seqA = a, seqB = b, scoringMatrix = sm)
-            print(s)
+            print("put {} {}".format(ha,hb))
+            tasks.put(Task(seqA=a, seqB=b, scoringMatrix = sm))
+    for i in range(num_cores):
+        tasks.put(None)
+    print(tasks.qsize())
+    resQueue = multiprocessing.Queue()
+    consumers = [ Consumer(tasks, resQueue) for i in range(num_cores) ]
+    print(consumers)
+    for c in consumers:
+        c.start()
+    for c in consumers:
+        c.join()
+
+class Task(object):
+    def __init__(self, seqA, seqB, scoringMatrix):
+        self.seqA = seqA
+        self.seqB = seqB
+        self.scoringMatrix = scoringMatrix
+
+    def call(self):
+        #print(self,"called")
+        return(Score(seqA = self.seqA, seqB = self.seqB, scoringMatrix=self.scoringMatrix))
+
+class Consumer(multiprocessing.Process):
+    def __init__(self,taskq, resq):
+        multiprocessing.Process.__init__(self)
+        self.taskq = taskq
+        self.resq = resq
+        global SEMAPHORE
+
+    def run(self):
+        SEMAPHORE.acquire()
+        while True:
+            t = self.taskq.get(True,0.1)
+            if t is None:
+                break
+            res = t.call()
+            #self.resq.put(res)
+            print(res)
+        SEMAPHORE.release()
+        return(None)
+
+
+
+
 
 if __name__=="__main__":
     main()
