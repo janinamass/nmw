@@ -13,6 +13,8 @@ import helpers.matrixparser as matrixparser
 import helpers.fastahelper as fastahelper
 import os
 import multiprocessing
+import queue
+import time
 
 package_directory = os.path.dirname(os.path.abspath(__file__))
 
@@ -160,7 +162,7 @@ def main():
     outfile = None
     num_cores = 1
     try:
-        opts, args = getopt.gnu_getopt(sys.argv[1:], "m:f:g:n:h",["matrix=","fasta_a=","fasta_b=","outfile=","num_cores","help"])
+        opts, args = getopt.gnu_getopt(sys.argv[1:], "m:f:g:o:n:h",["matrix=","fasta_a=","fasta_b=","outfile=","num_cores","help"])
     except getopt.GetoptError as err:
         sys.stderr.write(str(err))
         usage()
@@ -189,43 +191,54 @@ def main():
     if not outfile:
         outfile = "out"
     if num_cores < 2:
+        seen = set()
+        res = " "
         sm = ScoringMatrix(matrix)
         fpa = fastahelper.FastaParser().read(fasta_a, " ", 0)
         for ha,sa in fpa:
+            seen.add(ha)
             a = Sequence(ha,sa)
             fpb = fastahelper.FastaParser().read(fasta_b, " ", 0)
             for hb,sb in fpb:
+                if hb in seen:
+                    continue
                 b = Sequence(hb,sb)
                 s = Score(seqA = a, seqB = b, scoringMatrix = sm)
-                print(s)
+                res +=str(s)+"\n"
+        with open(outfile,'w')as out:
+            out.write(res)
     else:
         global SEMAPHORE
+        global LOCK
         SEMAPHORE = multiprocessing.BoundedSemaphore(num_cores)
+        LOCK = multiprocessing.Lock()
         nmw_multi(matrix=matrix, fasta_a= fasta_a, fasta_b = fasta_b, outfile= outfile, num_cores = num_cores)
 
 
 
 def nmw_multi(matrix, fasta_a, fasta_b, outfile, num_cores):
-    tasks = multiprocessing.Queue()
+    seen = set()
+    tasks = multiprocessing.JoinableQueue()
     sm = ScoringMatrix(matrix)
     fpa = fastahelper.FastaParser().read(fasta_a, " ", 0)
     for ha,sa in fpa:
+        seen.add(ha)
         a = Sequence(ha,sa)
         fpb = fastahelper.FastaParser().read(fasta_b, " ", 0)
         for hb,sb in fpb:
+            if hb in seen:
+                continue
             b = Sequence(hb,sb)
-            print("put {} {}".format(ha,hb))
             tasks.put(Task(seqA=a, seqB=b, scoringMatrix = sm))
     for i in range(num_cores):
         tasks.put(None)
-    print(tasks.qsize())
-    resQueue = multiprocessing.Queue()
-    consumers = [ Consumer(tasks, resQueue) for i in range(num_cores) ]
-    print(consumers)
+
+    consumers = [ Consumer(tasks, outfile) for i in range(num_cores) ]
     for c in consumers:
         c.start()
     for c in consumers:
         c.join()
+
 
 class Task(object):
     def __init__(self, seqA, seqB, scoringMatrix):
@@ -238,23 +251,25 @@ class Task(object):
         return(Score(seqA = self.seqA, seqB = self.seqB, scoringMatrix=self.scoringMatrix))
 
 class Consumer(multiprocessing.Process):
-    def __init__(self,taskq, resq):
+    def __init__(self,taskq, outfile):
         multiprocessing.Process.__init__(self)
         self.taskq = taskq
-        self.resq = resq
+        self.outfile = outfile
         global SEMAPHORE
-
+        global LOCK
     def run(self):
         SEMAPHORE.acquire()
         while True:
-            t = self.taskq.get(True,0.1)
+            t = self.taskq.get()
             if t is None:
+                print("quit", self)
                 break
             res = t.call()
-            #self.resq.put(res)
-            print(res)
+            LOCK.acquire()
+            with open(self.outfile,'a') as out:
+                out.write(str(res)+"\n")
+            LOCK.release()
         SEMAPHORE.release()
-        return(None)
 
 
 
