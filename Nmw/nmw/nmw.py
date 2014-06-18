@@ -72,14 +72,16 @@ class Score(object):
 
     def nmw(self):
         score = None
-        tmp =  Matrix(len(self.seqA.sequence)+1, len(self.seqB.sequence)+1)
+        tmp =  Matrix(len(self.seqA.sequence)+2, len(self.seqB.sequence)+2)
         tmpmat = tmp.matrix
         tmpmat[0][0] = 0
         #print(tmp.gap)
 
         """ needleman wunsch algo """
-        for i,si in enumerate(self.seqA.sequence):
-            for j,sj in enumerate(self.seqB.sequence):
+        for ii,si in enumerate(self.seqA.sequence):
+            for jj,sj in enumerate(self.seqB.sequence):
+                j = jj+1
+                i = ii+1
                 tmp.gap[i][j] = False
                 if tmp.gap[i][j-1]:
                     left = tmpmat[i][j-1]-self.gapExtend
@@ -95,6 +97,7 @@ class Score(object):
                 if max(choice) in [left,top]:
                     tmp.gap[i][j] = True
 
+        #print(tmp)
         score = tmp.getMax()
         return (score)
 
@@ -123,7 +126,9 @@ class Matrix(object):
 
     def getMax(self):
         mx = 0
-        for i in range(self.n-2, self.n-1):
+        e = min(self.n, self.m)
+        f = max(self.n, self.m)
+        for i in range(e-2, self.n-1):
             for j in range(0,self.m):
                 if self.matrix[i][j] > mx:
                     mx = self.matrix[i][j]
@@ -205,6 +210,7 @@ def main():
                 b = Sequence(hb,sb)
                 s = Score(seqA = a, seqB = b, scoringMatrix = sm)
                 res +=str(s)+"\n"
+        print(res)
         with open(outfile,'w')as out:
             out.write(res)
     else:
