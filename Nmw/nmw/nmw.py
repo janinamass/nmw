@@ -198,7 +198,7 @@ def main():
     out = open(outfile,'w')
     out.close()
     if num_cores < 2:
-        #seen = set()
+        seen = set()
         res = ""
         sm = ScoringMatrix(matrix)
         fpa = fastahelper.FastaParser().read(fasta_a, " ", 0)
@@ -222,7 +222,8 @@ def main():
         LOCK = multiprocessing.Lock()
         nmw_multi(matrix=matrix, fasta_a= fasta_a, fasta_b = fasta_b, outfile= outfile, num_cores = num_cores)
 
-
+    for a,res in readRes(outfile).items():
+        print(a,res)
 
 def nmw_multi(matrix, fasta_a, fasta_b, outfile, num_cores):
     seen = set()
@@ -281,7 +282,13 @@ class Consumer(multiprocessing.Process):
 
 
 
-
+def readRes(resfile):
+    res = {}
+    with open(resfile,'r') as resf:
+            for r in resf:
+                a,b,result = r.strip().split("\t")
+                res[(a,b)] = float(result)
+    return(res)
 
 if __name__=="__main__":
     main()
