@@ -187,17 +187,19 @@ def main():
         else:
             assert False, "unhandled option"
 
-    if not matrix:
-        usage()
+    if matrix is None:
+        matrix = "EBLOSUM62"
     if matrix not in avail:
         usage()
     if not fasta_a or not fasta_b:
         usage()
     if not outfile:
         outfile = "out"
+    out = open(outfile,'w')
+    out.close()
     if num_cores < 2:
-        seen = set()
-        res = " "
+        #seen = set()
+        res = ""
         sm = ScoringMatrix(matrix)
         fpa = fastahelper.FastaParser().read(fasta_a, " ", 0)
         for ha,sa in fpa:
@@ -205,8 +207,8 @@ def main():
             a = Sequence(ha,sa)
             fpb = fastahelper.FastaParser().read(fasta_b, " ", 0)
             for hb,sb in fpb:
-                if hb in seen:
-                    continue
+                #if hb in seen:
+                #    continue
                 b = Sequence(hb,sb)
                 s = Score(seqA = a, seqB = b, scoringMatrix = sm)
                 res +=str(s)+"\n"
@@ -228,12 +230,12 @@ def nmw_multi(matrix, fasta_a, fasta_b, outfile, num_cores):
     sm = ScoringMatrix(matrix)
     fpa = fastahelper.FastaParser().read(fasta_a, " ", 0)
     for ha,sa in fpa:
-        seen.add(ha)
         a = Sequence(ha,sa)
         fpb = fastahelper.FastaParser().read(fasta_b, " ", 0)
         for hb,sb in fpb:
-            if hb in seen:
+            if (ha,hb) in seen or (hb,ha) in seen:
                 continue
+            seen.add((ha,hb))
             b = Sequence(hb,sb)
             tasks.put(Task(seqA=a, seqB=b, scoringMatrix = sm))
     for i in range(num_cores):
@@ -268,7 +270,7 @@ class Consumer(multiprocessing.Process):
         while True:
             t = self.taskq.get()
             if t is None:
-                print("quit", self)
+                #print("quit", self)
                 break
             res = t.call()
             LOCK.acquire()
