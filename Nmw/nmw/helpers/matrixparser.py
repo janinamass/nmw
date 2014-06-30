@@ -24,7 +24,7 @@ class MatrixParser(object):
                         tmp = l.split(" ")
                         tmp = [t for t in tmp if t !=" " and t !=""]
                         aa2d[tmp[0]] ={}
-                        for i, a in enumerate(aa1[:-1]):
+                        for i, a in enumerate(aa1):
                             aa2d[l.split(" ")[0]] [a] = int(tmp[i+1])
 
         return(aa2d)
@@ -42,20 +42,24 @@ class MatrixReader(object):
 
 
 def main():
-    sourcedir = "data"
-    mp = MatrixParser("data/EBLOSUM62")
+    sourcedir = "../data"
+    mp = MatrixParser("../data/EBLOSUM62")
     print(mp.matrix)
-    mp.dumpMatrix("databin/EBLOSUM62")
-    mr = MatrixReader("databin/EBLOSUM62")
+    mp.dumpMatrix("../databin/EBLOSUM62")
+    mr = MatrixReader("../databin/EBLOSUM62")
     print(mr.matrix)
-    print("\n")
+    print("\n\n")
+    tmp = ""
     for f in mr.matrix:
         for s in mr.matrix[f]:
-            print(mr.matrix[f][s],f,s)
-    for f in os.listdir(sourcedir):
-        print(f)
-        fn = os.path.basename(f)
-        mp = MatrixParser(sourcedir+os.sep+f)
-        mp.dumpMatrix(matrixp = "databin"+os.sep+fn)
+            #print(mr.matrix[f][s],f,s)
+            tmp+="\"{}\":{}".format(f+""+s,mr.matrix[f][s])
+            tmp+=","
+    print(tmp)
+    #for f in os.listdir(sourcedir):
+    #    print(f)
+    #    fn = os.path.basename(f)
+    #    mp = MatrixParser(sourcedir+os.sep+f)
+    #    mp.dumpMatrix(matrixp = "../databin"+os.sep+fn)
 if __name__ == "__main__":
      main()
